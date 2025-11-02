@@ -38,8 +38,8 @@ async def _run_check(
     )
 
 
-async def check_aitunnel() -> IntegrationCheckResult:
-    """Ping the AITunnel API and return the result."""
+async def check_aitunnel_chat() -> IntegrationCheckResult:
+    """Ping the AITunnel chat endpoint and return the result."""
 
     client = ChatGPTClient()
 
@@ -50,14 +50,14 @@ async def check_aitunnel() -> IntegrationCheckResult:
             await client.close()
 
     return await _run_check(
-        name="AITunnel",
+        name="AITunnel chat",
         factory=_ping,
-        success_message="AITunnel API is reachable.",
+        success_message="AITunnel chat API is reachable.",
     )
 
 
-async def check_kie() -> IntegrationCheckResult:
-    """Ping the KIE AI API and return the result."""
+async def check_aitunnel_images() -> IntegrationCheckResult:
+    """Ping the AITunnel image endpoint and return the result."""
 
     client = ImageGeneratorClient()
 
@@ -68,13 +68,13 @@ async def check_kie() -> IntegrationCheckResult:
             await client.close()
 
     return await _run_check(
-        name="KIE AI",
+        name="AITunnel images",
         factory=_ping,
-        success_message="KIE AI API is reachable.",
+        success_message="AITunnel image API is reachable.",
     )
 
 
 async def run_all_checks() -> list[IntegrationCheckResult]:
     """Execute all integration checks concurrently."""
 
-    return await asyncio.gather(check_aitunnel(), check_kie())
+    return await asyncio.gather(check_aitunnel_chat(), check_aitunnel_images())

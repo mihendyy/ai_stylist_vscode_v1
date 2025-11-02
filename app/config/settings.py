@@ -27,10 +27,6 @@ class Settings(BaseSettings):
         default="",
         description="Telegram bot token issued by BotFather.",
     )
-    kie_ai_api_key: str = Field(
-        default="",
-        description="API key for KIE AI image services.",
-    )
     aitunnel_api_key: str = Field(
         default="",
         description="API key used to access the chat completion provider.",
@@ -57,13 +53,25 @@ class Settings(BaseSettings):
         default="/status",
         description="Relative path used for connectivity checks to AITunnel.",
     )
-    kie_base_url: str = Field(
-        default="https://api.kie.ai/v1",
-        description="Base URL for the KIE AI image services.",
+    aitunnel_chat_model: str = Field(
+        default="gpt-5-mini",
+        description="Model used for text-based wardrobe recommendations.",
     )
-    kie_health_path: str = Field(
-        default="/status",
-        description="Relative path used for connectivity checks to KIE AI.",
+    aitunnel_image_model: str = Field(
+        default="gemini-2.5-flash-image",
+        description="Model used for outfit image editing.",
+    )
+    aitunnel_image_size: str = Field(
+        default="1024x1536",
+        description="Target resolution for generated outfit images.",
+    )
+    aitunnel_image_quality: str = Field(
+        default="medium",
+        description="Quality preset for image generation.",
+    )
+    aitunnel_image_moderation: str = Field(
+        default="low",
+        description="Moderation level for image requests.",
     )
     weather_api_key: str = Field(
         default="",

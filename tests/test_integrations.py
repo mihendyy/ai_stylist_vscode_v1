@@ -3,43 +3,47 @@
 from __future__ import annotations
 
 import pytest
-import respx
-from httpx import Response
+import pytest_mock
 
 from app.config.settings import get_settings
-from app.integrations.checks import check_aitunnel, check_kie
+from app.integrations.checks import (
+    check_aitunnel_chat,
+    check_aitunnel_images,
+)
 
 
 @pytest.fixture(autouse=True)
 def _setup_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AITUNNEL_API_KEY", "test-aitunnel")
-    monkeypatch.setenv("KIE_AI_API_KEY", "test-kie")
     monkeypatch.setenv("AITUNNEL_BASE_URL", "https://aitunnel.test")
-    monkeypatch.setenv("KIE_BASE_URL", "https://kie.test")
-    monkeypatch.setenv("AITUNNEL_HEALTH_PATH", "/health")
-    monkeypatch.setenv("KIE_HEALTH_PATH", "/healthz")
+    monkeypatch.setenv("AITUNNEL_HEALTH_PATH", "/status")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_check_aitunnel_success() -> None:
-    respx.get("https://aitunnel.test/health").mock(return_value=Response(200))
+async def test_check_aitunnel_chat_success(mocker: pytest_mock.MockerFixture) -> None:
+    client_mock = mocker.patch("app.integrations.checks.ChatGPTClient", autospec=True)
+    instance = client_mock.return_value
+    instance.ping = mocker.AsyncMock(return_value=True)
+    instance.close = mocker.AsyncMock(return_value=None)
 
-    result = await check_aitunnel()
+    result = await check_aitunnel_chat()
 
     assert result.success
-    assert result.name == "AITunnel"
+    instance.ping.assert_awaited_once()
+    instance.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_check_kie_failure() -> None:
-    respx.get("https://kie.test/healthz").mock(return_value=Response(503))
+async def test_check_aitunnel_images_failure(mocker: pytest_mock.MockerFixture) -> None:
+    client_mock = mocker.patch("app.integrations.checks.ImageGeneratorClient", autospec=True)
+    instance = client_mock.return_value
+    instance.ping = mocker.AsyncMock(return_value=False)
+    instance.close = mocker.AsyncMock(return_value=None)
 
-    result = await check_kie()
+    result = await check_aitunnel_images()
 
     assert not result.success
     assert "non-success" in result.message.lower()

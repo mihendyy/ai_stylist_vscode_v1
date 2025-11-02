@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-import httpx
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from app.config.settings import get_settings
@@ -20,40 +20,39 @@ class RecommendationResponse(BaseModel):
 
 
 class ChatGPTClient:
-    """Thin HTTP client that communicates with the aitunnel proxy."""
+    """Thin client that communicates with the AITunnel OpenAI-compatible proxy."""
 
     def __init__(self) -> None:
         settings = get_settings()
         if not settings.aitunnel_api_key:
             raise RuntimeError("AITunnel API key is not configured.")
-        self._client = httpx.AsyncClient(
-            base_url=settings.aitunnel_base_url,
-            headers={"Authorization": f"Bearer {settings.aitunnel_api_key}"},
-            timeout=30.0,
+
+        self._settings = settings
+        self._client = AsyncOpenAI(
+            api_key=settings.aitunnel_api_key,
+            base_url=settings.aitunnel_base_url.rstrip("/"),
         )
-        self._health_path = settings.aitunnel_health_path
 
     async def generate_recommendation(self, payload: dict) -> RecommendationResponse:
         """Send a recommendation prompt to the chat model."""
 
-        response = await self._client.post("/chat/completions", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        if "choices" in data and data["choices"]:
-            content = data["choices"][0]["message"]["content"]
-            parsed = json.loads(content)
-        else:
-            parsed = data
+        response = await self._client.chat.completions.create(
+            model=self._settings.aitunnel_chat_model,
+            messages=payload["messages"],
+            max_tokens=payload.get("max_tokens", 1200),
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content or "{}"
+        parsed = json.loads(content)
         return RecommendationResponse.model_validate(parsed)
 
     async def ping(self) -> bool:
-        """Return ``True`` if the upstream service responds to a health check."""
+        """Return ``True`` if the upstream service responds to a model listing call."""
 
-        response = await self._client.get(self._health_path)
-        response.raise_for_status()
-        return response.is_success
+        models = await self._client.models.list()
+        return bool(models.data)
 
     async def close(self) -> None:
         """Release HTTP resources."""
 
-        await self._client.aclose()
+        await self._client.close()

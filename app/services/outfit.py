@@ -57,12 +57,11 @@ class OutfitOrchestrator:
             "wardrobe": wardrobe_listing,
         }
         return {
-            "model": "gpt-4.1-mini",
-            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_prompt, ensure_ascii=False)},
             ],
+            "max_tokens": 1200,
         }
 
     def _pick_selected_garments(

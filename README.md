@@ -10,7 +10,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Populate the `.env` file with the required API keys (Telegram bot token, KIE AI key, AITunnel key). The values stay local because `.env` is ignored by git.
+Populate the `.env` file with the required API keys (Telegram bot token, AITunnel key). The values stay local because `.env` is ignored by git.
 
 ## Project layout
 
@@ -43,14 +43,14 @@ User flow inside Telegram:
 1. `/start` — бот рассказывает о возможностях и просит селфи в полный рост.
 2. После селфи отправляйте вещи по одной фотографии; бот попросит выбрать категорию каждой (верх/низ/обувь/аксессуар/верхняя одежда).
 3. Напишите «готово», когда все вещи загружены, затем опишите любимые стили или референсы.
-4. Когда готовы, спросите «что надеть сегодня?» — бот вызовет AITunnel и Nano Banana, пришлёт текстовую рекомендацию и визуализацию образа.
+4. Когда готовы, спросите «что надеть сегодня?» — бот вызовет AITunnel (модель gpt-5-mini для текста и gemini-2.5-flash-image для визуализации) и пришлёт рекомендацию вместе с изображением.
 
 ## Connectivity checks
 
-Чтобы убедиться, что AITunnel и KIE доступны, выполните:
+Чтобы убедиться, что AITunnel доступен и отвечает, выполните:
 
 ```bash
 python scripts/check_integrations.py
 ```
 
-Скрипт выполнит по одному запросу к каждому сервису и выведет статус (требуются корректные API-ключи).
+Скрипт выполнит проверку текстового и визуального API и выведет статус (требуется корректный AITunnel ключ).
