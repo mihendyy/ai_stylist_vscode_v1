@@ -43,8 +43,6 @@ class Settings:
     aitunnel_image_model: str = "gemini-2.5-flash-image"
     aitunnel_image_size: str = "1024x1536"
     aitunnel_image_quality: str = "medium"
-    aitunnel_image_moderation: str = "low"
-
     weather_api_key: str = ""
 
 
@@ -65,7 +63,6 @@ def _build_settings() -> Settings:
         aitunnel_image_model=os.getenv("AITUNNEL_IMAGE_MODEL", "gemini-2.5-flash-image"),
         aitunnel_image_size=os.getenv("AITUNNEL_IMAGE_SIZE", "1024x1536"),
         aitunnel_image_quality=os.getenv("AITUNNEL_IMAGE_QUALITY", "medium"),
-        aitunnel_image_moderation=os.getenv("AITUNNEL_IMAGE_MODERATION", "low"),
         weather_api_key=os.getenv("WEATHER_API_KEY", ""),
     )
 

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import base64
 from io import BytesIO
+from pathlib import Path
 
 from openai import AsyncOpenAI
+from PIL import Image
 
 from app.config.settings import get_settings
 
@@ -24,31 +25,40 @@ class ImageGeneratorClient:
             base_url=settings.aitunnel_base_url.rstrip("/"),
         )
 
+    def _image_as_png(self, source_path: Path, name_prefix: str) -> BytesIO:
+        """Convert arbitrary image to PNG bytes since edit API requires PNG input."""
+
+        with Image.open(source_path) as img:
+            img = img.convert("RGBA")
+            buffer = BytesIO()
+            img.save(buffer, format="PNG")
+            buffer.seek(0)
+        buffer.name = f"{name_prefix}.png"
+        return buffer
+
     async def generate_outfit(self, payload: dict) -> dict:
         """Send outfit images to the multimodal model and return base64 response."""
 
-        selfie_bytes = base64.b64decode(payload["selfie_image"])
-        garment_files: list[BytesIO] = []
+        image_files: list[BytesIO] = []
+        try:
+            selfie_path = Path(payload["selfie_path"]).expanduser()
+            image_files.append(self._image_as_png(selfie_path, "selfie"))
 
-        selfie_file = BytesIO(selfie_bytes)
-        selfie_file.name = "selfie.png"
+            for index, garment_path_str in enumerate(payload.get("garment_paths", []), start=1):
+                garment_path = Path(garment_path_str).expanduser()
+                image_files.append(self._image_as_png(garment_path, f"garment_{index}"))
 
-        for index, garment in enumerate(payload.get("garment_images", []), start=1):
-            garment_file = BytesIO(base64.b64decode(garment["image"]))
-            garment_file.name = f"garment_{index}.png"
-            garment_files.append(garment_file)
-
-        images = [selfie_file, *garment_files]
-
-        result = await self._client.images.edit(
-            model=self._settings.aitunnel_image_model,
-            image=images,  # type: ignore[arg-type]
-            prompt=payload["instructions"],
-            size=self._settings.aitunnel_image_size,
-            quality=self._settings.aitunnel_image_quality,
-            moderation=self._settings.aitunnel_image_moderation,
-            response_format="b64_json",
-        )
+            result = await self._client.images.edit(
+                model=self._settings.aitunnel_image_model,
+                image=image_files,  # type: ignore[arg-type]
+                prompt=payload["instructions"],
+                size=self._settings.aitunnel_image_size,
+                quality=self._settings.aitunnel_image_quality,
+                response_format="b64_json",
+            )
+        finally:
+            for file in image_files:
+                file.close()
 
         return {
             "image_base64": result.data[0].b64_json,

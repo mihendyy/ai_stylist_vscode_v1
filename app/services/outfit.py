@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import base64
 import json
-from pathlib import Path
 from typing import Any, Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +11,6 @@ from app.db import models
 from app.imggen.generator_client import ImageGeneratorClient
 from app.nlp.chatgpt_client import ChatGPTClient, RecommendationResponse
 from app.services.wardrobe import WardrobeService
-
-
-def _encode_file(path: Path) -> str:
-    """Return base64-encoded content of the file."""
-
-    return base64.b64encode(path.read_bytes()).decode("utf-8")
-
 
 class OutfitOrchestrator:
     """Coordinates the conversation model with the image generation backend."""
@@ -46,15 +37,16 @@ class OutfitOrchestrator:
 
         system_prompt = (
             "Ты — персональный стилист, который подбирает образы из гардероба пользователя. "
-            "Всегда отвечай валидным JSON с полями: suggested_outfit (список объектов "
-            "c garment_id и description), natural_text (краткое дружелюбное сообщение), "
-            "reasons (список строк) и missing_items (список строк с рекомендациями). "
-            "Не придумывай вещи, которых нет в гардеробе. Если одежды недостаточно, "
-            "укажи это в natural_text и добавь в missing_items."
+            "Отвечай ТОЛЬКО JSON объектом со следующей структурой: {\"suggested_outfit\": ["
+            "{""garment_id"": int, ""description"": str}], \"natural_text\": str, "
+            "\"reasons\": [str], \"missing_items\": [str] }. Используй garment_id из раздела "
+            "wardrobe. Если подходящих вещей нет, верни пустой suggested_outfit и объясни это в "
+            "natural_text. Не добавляй лишних полей и не используй Markdown."
         )
         user_prompt = {
             "style_reference": style_reference,
             "wardrobe": wardrobe_listing,
+            "request": "Подбери образ из имеющихся вещей. Если чего-то не хватает — перечисли в missing_items.",
         }
         return {
             "messages": [
@@ -119,15 +111,8 @@ class OutfitOrchestrator:
         image_client = ImageGeneratorClient()
         try:
             generation_payload = {
-                "selfie_image": _encode_file(Path(selfie.storage_path)),
-                "garment_images": [
-                    {
-                        "garment_id": garment.id,
-                        "label": garment.label,
-                        "image": _encode_file(Path(garment.storage_path)),
-                    }
-                    for garment in selected_garments
-                ],
+                "selfie_path": selfie.storage_path,
+                "garment_paths": [garment.storage_path for garment in selected_garments],
                 "instructions": recommendation.natural_text,
             }
             generation_result = await image_client.generate_outfit(generation_payload)

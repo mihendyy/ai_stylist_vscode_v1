@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, ValidationError
 
 from app.config.settings import get_settings
 
@@ -44,7 +46,7 @@ class ChatGPTClient:
         )
         content = response.choices[0].message.content or "{}"
         parsed = json.loads(content)
-        return RecommendationResponse.model_validate(parsed)
+        return self._coerce_response(parsed)
 
     async def ping(self) -> bool:
         """Return ``True`` if the upstream service responds to a model listing call."""
@@ -56,3 +58,33 @@ class ChatGPTClient:
         """Release HTTP resources."""
 
         await self._client.close()
+
+    def _coerce_response(self, payload: Any) -> RecommendationResponse:
+        """Attempt to validate provider response and fall back to safe defaults."""
+
+        if isinstance(payload, str):
+            payload = {"natural_text": payload}
+
+        if not isinstance(payload, dict):
+            payload = {}
+
+        def _as_list(value: Any) -> list[str]:
+            if isinstance(value, list):
+                return [str(item) for item in value]
+            if isinstance(value, str) and value:
+                return [value]
+            return []
+
+        default_payload = {
+            "suggested_outfit": payload.get("suggested_outfit") or [],
+            "natural_text": payload.get("natural_text") or "Не удалось получить текст рекомендации.",
+            "reasons": _as_list(payload.get("reasons")),
+            "missing_items": _as_list(payload.get("missing_items")),
+        }
+
+        try:
+            return RecommendationResponse.model_validate(default_payload)
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"Invalid response from recommendation model: {payload}",
+            ) from exc
