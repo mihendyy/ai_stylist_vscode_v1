@@ -1,86 +1,77 @@
-"""Application configuration powered by environment variables."""
+"""Application configuration loaded from environment variables."""
 
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Literal
-
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 
-class Settings(BaseSettings):
-    """Centralised project settings loaded from the .env file and OS environment."""
+def _load_env_file(path: str = ".env") -> None:
+    """Populate os.environ from the provided .env file if it exists."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        env_prefix="",
-        extra="ignore",
-    )
+    env_path = Path(path)
+    if not env_path.exists():
+        return
 
-    environment: Literal["dev", "test", "prod"] = Field(
-        default="dev",
-        description="Runtime environment flag used for environment-aware decisions.",
-    )
-    log_level: str = Field(default="INFO", description="Application logging level.")
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip())
 
-    telegram_bot_token: str = Field(
-        default="",
-        description="Telegram bot token issued by BotFather.",
-    )
-    aitunnel_api_key: str = Field(
-        default="",
-        description="API key used to access the chat completion provider.",
-    )
 
-    database_url: str = Field(
-        default="sqlite+aiosqlite:///./data/app.db",
-        description="SQLAlchemy-compatible database DSN.",
-    )
-    redis_url: str = Field(
-        default="redis://localhost:6379/0",
-        description="Redis connection string for caching and queues.",
-    )
-    media_root: str = Field(
-        default="data/media",
-        description="Filesystem path used to store user-uploaded media in development.",
-    )
+@dataclass(frozen=True, slots=True)
+class Settings:
+    """Centralised project settings based on OS environment variables."""
 
-    aitunnel_base_url: str = Field(
-        default="https://api.aitunnel.ai/v1",
-        description="Base URL for the dialog provider.",
-    )
-    aitunnel_health_path: str = Field(
-        default="/status",
-        description="Relative path used for connectivity checks to AITunnel.",
-    )
-    aitunnel_chat_model: str = Field(
-        default="gpt-5-mini",
-        description="Model used for text-based wardrobe recommendations.",
-    )
-    aitunnel_image_model: str = Field(
-        default="gemini-2.5-flash-image",
-        description="Model used for outfit image editing.",
-    )
-    aitunnel_image_size: str = Field(
-        default="1024x1536",
-        description="Target resolution for generated outfit images.",
-    )
-    aitunnel_image_quality: str = Field(
-        default="medium",
-        description="Quality preset for image generation.",
-    )
-    aitunnel_image_moderation: str = Field(
-        default="low",
-        description="Moderation level for image requests.",
-    )
-    weather_api_key: str = Field(
-        default="",
-        description="Optional weather provider token (P2 feature).",
+    environment: str = "dev"
+    log_level: str = "INFO"
+
+    telegram_bot_token: str = ""
+    aitunnel_api_key: str = ""
+
+    database_url: str = "sqlite+aiosqlite:///./data/app.db"
+    redis_url: str = "redis://localhost:6379/0"
+    media_root: str = "data/media"
+
+    aitunnel_base_url: str = "https://api.aitunnel.ru/v1"
+    aitunnel_health_path: str = "/models"
+    aitunnel_chat_model: str = "gpt-5-mini"
+    aitunnel_image_model: str = "gemini-2.5-flash-image"
+    aitunnel_image_size: str = "1024x1536"
+    aitunnel_image_quality: str = "medium"
+    aitunnel_image_moderation: str = "low"
+
+    weather_api_key: str = ""
+
+
+def _build_settings() -> Settings:
+    _load_env_file()
+
+    return Settings(
+        environment=os.getenv("ENVIRONMENT", "dev"),
+        log_level=os.getenv("LOG_LEVEL", "INFO"),
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        aitunnel_api_key=os.getenv("AITUNNEL_API_KEY", ""),
+        database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/app.db"),
+        redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        media_root=os.getenv("MEDIA_ROOT", "data/media"),
+        aitunnel_base_url=os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1"),
+        aitunnel_health_path=os.getenv("AITUNNEL_HEALTH_PATH", "/models"),
+        aitunnel_chat_model=os.getenv("AITUNNEL_CHAT_MODEL", "gpt-5-mini"),
+        aitunnel_image_model=os.getenv("AITUNNEL_IMAGE_MODEL", "gemini-2.5-flash-image"),
+        aitunnel_image_size=os.getenv("AITUNNEL_IMAGE_SIZE", "1024x1536"),
+        aitunnel_image_quality=os.getenv("AITUNNEL_IMAGE_QUALITY", "medium"),
+        aitunnel_image_moderation=os.getenv("AITUNNEL_IMAGE_MODERATION", "low"),
+        weather_api_key=os.getenv("WEATHER_API_KEY", ""),
     )
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return cached settings instance to avoid re-parsing the .env file."""
+    """Return cached settings instance to avoid re-reading configuration."""
 
-    return Settings()  # type: ignore[call-arg]
+    return _build_settings()
