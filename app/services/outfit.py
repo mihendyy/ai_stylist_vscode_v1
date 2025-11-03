@@ -37,11 +37,13 @@ class OutfitOrchestrator:
 
         system_prompt = (
             "Ты — персональный стилист, который подбирает образы из гардероба пользователя. "
-            "Отвечай ТОЛЬКО JSON объектом со следующей структурой: {\"suggested_outfit\": ["
-            "{""garment_id"": int, ""description"": str}], \"natural_text\": str, "
-            "\"reasons\": [str], \"missing_items\": [str] }. Используй garment_id из раздела "
-            "wardrobe. Если подходящих вещей нет, верни пустой suggested_outfit и объясни это в "
-            "natural_text. Не добавляй лишних полей и не используй Markdown."
+            "Ответ строго в формате JSON без пояснений и Markdown. Структура: "
+            "{\\\"suggested_outfit\\\": [{\\\"garment_id\\\": int, \\\"description\\\": string}], "
+            "\\\"natural_text\\\": string, \\\"reasons\\\": [string], \\\"missing_items\\\": [string]}. "
+            "Используй garment_id ровно из списка wardrobe. Если подходящих вещей нет, оставь "
+            "\\\"suggested_outfit\\\" пустым и объясни причину в \\\"natural_text\\\", перечисли "
+            "недостающие предметы в \\\"missing_items\\\". Убедись, что возвращаемый JSON валиден и "
+            "использует двойные кавычки."
         )
         user_prompt = {
             "style_reference": style_reference,
@@ -113,6 +115,7 @@ class OutfitOrchestrator:
             generation_payload = {
                 "selfie_path": selfie.storage_path,
                 "garment_paths": [garment.storage_path for garment in selected_garments],
+                "garment_labels": [garment.label or "вещь" for garment in selected_garments],
                 "instructions": recommendation.natural_text,
             }
             generation_result = await image_client.generate_outfit(generation_payload)

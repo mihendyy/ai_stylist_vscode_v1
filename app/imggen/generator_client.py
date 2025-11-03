@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 from PIL import Image
 
 from app.config.settings import get_settings
@@ -56,13 +57,72 @@ class ImageGeneratorClient:
                 quality=self._settings.aitunnel_image_quality,
                 response_format="b64_json",
             )
+        except BadRequestError as exc:
+            if "No valid image files provided" not in str(exc):
+                raise
+            prompt = self._build_fallback_prompt(payload)
+            return await self._generate_with_prompt(prompt)
         finally:
             for file in image_files:
                 file.close()
 
-        return {
-            "image_base64": result.data[0].b64_json,
+        return self._to_payload(result)
+
+    def _build_fallback_prompt(self, payload: dict[str, Any]) -> str:
+        """Compose a textual prompt when we cannot edit the selfie directly."""
+
+        garment_list = ", ".join(payload.get("garment_labels", [])) or "подходящие вещи"
+        base_instruction = payload.get("instructions", "").strip()
+        extra = (
+            "Сгенерируй портрет пользователя в полный рост в реалистичном стиле, "
+            f"используя гардероб: {garment_list}. "
+            "Сфокусируйся на дружелюбном, модном образе. Фон нейтральный."
+        )
+        if base_instruction:
+            return f"{base_instruction}. {extra}"
+        return extra
+
+    async def _generate_with_prompt(self, prompt: str) -> dict[str, Any]:
+        try:
+            result = await self._client.images.generate(
+                model=self._settings.aitunnel_image_model,
+                prompt=prompt,
+                size=self._settings.aitunnel_image_size,
+                quality=self._settings.aitunnel_image_quality,
+                response_format="b64_json",
+            )
+            return self._to_payload(result, fallback_prompt=prompt)
+        except BadRequestError as exc:
+            if "no_images_generated" in str(exc).lower():
+                return {"image_base64": None, "image_url": None, "error": "no_images_generated", "prompt": prompt}
+            raise
+
+    def _to_payload(self, result, fallback_prompt: str | None = None) -> dict[str, Any]:
+        primary = {}
+        data_attr = getattr(result, "data", None)
+        if isinstance(data_attr, list) and data_attr:
+            primary = data_attr[0]
+        else:
+            primary = result
+        image_base64 = getattr(primary, "b64_json", None)
+        image_url = getattr(primary, "url", None)
+        error_code = getattr(primary, "error", None)
+
+        if image_base64 is None and isinstance(primary, dict):
+            image_base64 = primary.get("b64_json")
+        if image_url is None and isinstance(primary, dict):
+            image_url = primary.get("url")
+        if error_code is None and isinstance(primary, dict):
+            error_code = primary.get("error")
+        base_payload: dict[str, Any] = {
+            "image_base64": image_base64,
+            "image_url": image_url,
         }
+        if fallback_prompt:
+            base_payload["prompt"] = fallback_prompt
+        if error_code:
+            base_payload["error"] = error_code
+        return base_payload
 
     async def ping(self) -> bool:
         """Return ``True`` when the service responds to a model listing call."""

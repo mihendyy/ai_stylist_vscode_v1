@@ -398,6 +398,14 @@ class TelegramBot:
             )
             return
 
+        error_code = payload.get("error")
+        if error_code == "no_images_generated":
+            await message.answer(
+                "Модели не удалось построить визуализацию по текущим данным. Добавьте ещё фото вещей "
+                "или уточните пожелания к образу, и я попробую снова.",
+            )
+            return
+
         await message.answer(
             "Изображение пока не готово. Я сообщу, как только смогу его получить.",
         )

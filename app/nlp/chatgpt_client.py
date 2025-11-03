@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
-
-from openai import AsyncOpenAI
+import logging
 from typing import Any
 
+from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from app.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class RecommendationResponse(BaseModel):
@@ -45,7 +47,11 @@ class ChatGPTClient:
             response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content or "{}"
-        parsed = json.loads(content)
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse recommendation JSON: %s", content)
+            parsed = {"natural_text": content}
         return self._coerce_response(parsed)
 
     async def ping(self) -> bool:
@@ -77,7 +83,8 @@ class ChatGPTClient:
 
         default_payload = {
             "suggested_outfit": payload.get("suggested_outfit") or [],
-            "natural_text": payload.get("natural_text") or "Не удалось получить текст рекомендации.",
+            "natural_text": payload.get("natural_text")
+            or "Я пока не смог подобрать образ из-за недостатка данных. Пожалуйста, уточните стиль или добавьте больше вещей.",
             "reasons": _as_list(payload.get("reasons")),
             "missing_items": _as_list(payload.get("missing_items")),
         }
@@ -85,6 +92,7 @@ class ChatGPTClient:
         try:
             return RecommendationResponse.model_validate(default_payload)
         except ValidationError as exc:
+            logger.error("Invalid recommendation payload after coercion: %s", payload)
             raise RuntimeError(
-                f"Invalid response from recommendation model: {payload}",
+                "Модель рекомендаций вернула некорректный формат ответа.",
             ) from exc
