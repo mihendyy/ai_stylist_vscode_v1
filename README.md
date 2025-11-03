@@ -20,7 +20,8 @@ Populate the `.env` file with the required API keys (Telegram bot token, AITunne
 - `app/catalog/`, `app/imgproc/`, `app/imggen/`, `app/recommender/` — building blocks for the outfit pipeline.
 - `app/workers/` — Celery tasks for asynchronous generation and maintenance.
 - `app/db/` — SQLAlchemy models for users, garments and feedback.
-- `tests/` — pytest suite (currently contains API health check).
+- `tests/` — pytest suite (API health check, integration checks, MVP smoke tests).
+- `mvp/` — упрощённый MVP-бот с отдельной логикой, хранилищем и обработчиками.
 
 ## Running FastAPI locally
 
@@ -43,7 +44,24 @@ User flow inside Telegram:
 1. `/start` — бот рассказывает о возможностях и просит селфи в полный рост.
 2. После селфи отправляйте вещи по одной фотографии; бот попросит выбрать категорию каждой (верх/низ/обувь/аксессуар/верхняя одежда).
 3. Напишите «готово», когда все вещи загружены, затем опишите любимые стили или референсы.
-4. Когда готовы, спросите «что надеть сегодня?» — бот вызовет AITunnel (модель gpt-5-mini для текста и gemini-2.5-flash-image для визуализации) и пришлёт рекомендацию вместе с изображением.
+4. Когда готовы, спросите «что надеть сегодня?» — бот вызовет AITunnel (модель gpt-5-mini для текста и gemini-2.5-flash-image для визуализации) и принесёт рекомендацию вместе с изображением.
+
+## MVP Telegram bot
+
+Для лёгкого тестирования реализован отдельный MVP в каталоге `mvp/`:
+
+```bash
+python -m mvp.bot_service.bot
+```
+
+Потребуются переменные окружения:
+
+- `TELEGRAM_BOT_TOKEN`
+- `AITUNNEL_API_KEY`
+- `AITUNNEL_BASE_URL` (по умолчанию `https://api.aitunnel.ru/v1`)
+- `AITUNNEL_IMAGE_MODEL` (если нужно переопределить модель, по умолчанию `gemini-2.5-flash-image-preview`)
+
+Бот сохраняет пользовательские данные в `storage/users/` (JSON) и генерирует изображения в `storage/generated/`.
 
 ## Connectivity checks
 
