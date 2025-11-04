@@ -7,7 +7,7 @@ from aiogram import Router
 from mvp.bot_service.context import BotContext
 from mvp.bot_service.voice_processor import VoiceProcessor
 
-from . import outfit_today, start, style, upload
+from . import outfit_today, reset, start, style, upload
 
 
 def setup_handlers(router: Router, context: BotContext, voice_processor: VoiceProcessor) -> None:
@@ -17,3 +17,4 @@ def setup_handlers(router: Router, context: BotContext, voice_processor: VoicePr
     upload.setup(router, context)
     style.setup(router, context, voice_processor)
     outfit_today.setup(router, context)
+    reset.setup(router, context)

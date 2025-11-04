@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import shutil
 
 DEFAULT_WARDROBE = {
     "top": [],
@@ -171,3 +172,19 @@ class UserStorage:
 
         _, generated = self.ensure_user_dirs(user_id)
         return generated
+
+    async def reset_user(self, user_id: str) -> None:
+        """Remove stored data for the given user."""
+
+        async with self._lock_for(user_id):
+            user_dir = self._root / user_id
+            generated_dir = self._generated_root / user_id
+            await asyncio.gather(
+                asyncio.to_thread(self._delete_dir, user_dir),
+                asyncio.to_thread(self._delete_dir, generated_dir),
+            )
+
+    @staticmethod
+    def _delete_dir(path: Path) -> None:
+        if path.exists():
+            shutil.rmtree(path)
