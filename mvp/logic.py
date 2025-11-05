@@ -99,9 +99,11 @@ class StylistLogic:
                 "role": "system",
                 "content": (
                     "Ты — AI-стилист. Подбирай образ только из файлов wardrobe пользователя. "
-                    "Ответ строго в JSON: {\"recommended_items\": [{\"category\": \"top\", \"path\": \"...\", \"label\": \"...\"}], "
-                    "\"summary_text\": \"...\", \"prompt_text\": \"...\"}. "
-                    "Не добавляй Markdown и комментарии."
+                    "Каждый элемент списка wardrobe представляет путь к локальному изображению. "
+                    "Ответ строго в JSON: {\"recommended_items\": [{\"category\": \"top\", \"path\": \"...\", "
+                    "\"label\": \"...\"}], \"summary_text\": \"...\", \"prompt_text\": \"...\"}. "
+                    "Поле path должно быть точной строкой из входного словаря wardrobe. "
+                    "Не добавляй Markdown и комментарии, не придумывай новых вещей."
                 ),
             },
             {
@@ -138,7 +140,8 @@ class StylistLogic:
             raise OutfitPlanningError("Гардероб пуст. Добавьте несколько вещей.")
 
         recommendation = await self.plan_outfit(profile, extra_context=extra_context)
-        recommended = self._select_paths(profile, recommendation.get("recommended_items", []))
+        items = recommendation.get("recommended_items", []) or []
+        recommended = self._select_paths(profile, items)
         if not recommended:
             # fallback: at least take first items from each category
             recommended = self._fallback_paths(profile)
@@ -150,25 +153,19 @@ class StylistLogic:
             weather=(extra_context or {}).get("weather") or profile.daily_context.get("weather"),
         )
 
-        labels: list[str] = []
-        items = recommendation.get("recommended_items", []) or []
-        for index, path in enumerate(recommended):
-            label = Path(path).stem
-            if index < len(items):
-                entry = items[index]
-                if isinstance(entry, dict):
-                    label = entry.get("label") or entry.get("name") or label
-                elif isinstance(entry, str) and entry:
-                    label = entry
-            labels.append(label)
-        prompt = self._prompt_builder.build(labels, prompt_context)
+        garment_details = self._build_garment_details(profile, recommended, items)
+        prompt = self._prompt_builder.build(
+            garment_details,
+            prompt_context,
+            selfie_filename=Path(profile.selfie_path).name,
+        )
 
-        image_inputs = [Path(profile.selfie_path), *[Path(path) for path in recommended]]
         try:
             image_result = await self._image_service.generate(
                 profile.user_id,
                 prompt,
-                image_inputs,
+                selfie_path=Path(profile.selfie_path),
+                garments=garment_details,
                 options={"size": "1024x1536", "quality": "high"},
             )
         except AITunnelRequestError as exc:
@@ -203,6 +200,38 @@ class StylistLogic:
             if items:
                 fallback.append(items[0])
         return fallback[:3]
+
+    def _build_garment_details(
+        self,
+        profile: UserProfile,
+        selected_paths: Sequence[str],
+        recommendation_items: Sequence[Mapping[str, Any]],
+    ) -> list[dict[str, str]]:
+        """Enrich selected garment paths with metadata for prompt construction."""
+
+        by_path = {str(item.get("path")): item for item in recommendation_items if isinstance(item, Mapping)}
+        details: list[dict[str, str]] = []
+        for path in selected_paths:
+            category = self._find_category_for_path(profile, path)
+            label = Path(path).stem
+            rec_item = by_path.get(path)
+            if rec_item:
+                label = rec_item.get("label") or rec_item.get("name") or label
+            details.append(
+                {
+                    "path": path,
+                    "category": category or "неизвестно",
+                    "label": label,
+                    "filename": Path(path).name,
+                },
+            )
+        return details
+
+    def _find_category_for_path(self, profile: UserProfile, path: str) -> str | None:
+        for category, paths in profile.wardrobe.items():
+            if path in paths:
+                return category
+        return None
 
     @staticmethod
     def _first_choice_content(response: Mapping[str, Any], error_cls: type[Exception]) -> str:

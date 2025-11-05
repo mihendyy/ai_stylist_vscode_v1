@@ -12,8 +12,13 @@ def test_prompt_builder_includes_context() -> None:
         weather="прохладно",
     )
 
-    prompt = builder.build(["рубашка", "джинсы"], context)
+    garments = [
+        {"label": "белая рубашка", "category": "top", "filename": "top.jpg"},
+        {"label": "тёмные джинсы", "category": "bottom", "filename": "bottom.jpg"},
+    ]
+    prompt = builder.build(garments, context, selfie_filename="selfie.jpg")
 
-    assert "рубашка" in prompt
+    assert "белая рубашка" in prompt
+    assert "файл selfie.jpg" in prompt
     assert "Стиль: casual" in prompt
     assert "Повод: ужин" in prompt

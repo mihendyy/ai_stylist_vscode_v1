@@ -5,11 +5,14 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import httpx
 import logging
+from openai import AsyncOpenAI, BadRequestError
+from PIL import Image, UnidentifiedImageError
 
 from mvp.config.settings import MVPSettings
 
@@ -38,11 +41,16 @@ class AITunnelClient:
                 "Authorization": f"Bearer {settings.aitunnel_api_key}",
             },
         )
+        self._openai = AsyncOpenAI(
+            api_key=settings.aitunnel_api_key,
+            base_url=base_url,
+        )
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
 
         await self._client.aclose()
+        await self._openai.close()
 
     async def _request_json(
         self,
@@ -104,52 +112,84 @@ class AITunnelClient:
     async def generate_image(
         self,
         prompt: str,
-        image_paths: Sequence[Path],
         *,
+        selfie_path: Path,
+        garments: Sequence[Mapping[str, str]],
         options: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """
-        Trigger image generation via the chat completions endpoint with image modality.
+        """Generate an edited selfie using the OpenAI-compatible images.edit endpoint."""
 
-        ``image_paths`` should contain local file paths (selfie and garments) that will be
-        embedded into the request as base64 data URLs.
-        """
+        image_files: list[BytesIO] = []
+        try:
+            if selfie_path.exists():
+                image_files.append(self._image_as_png(selfie_path, "selfie"))
+            else:
+                raise FileNotFoundError(f"Основное изображение не найдено: {selfie_path}")
 
-        content_parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
-        for path in image_paths:
-            if not path.exists():
-                continue
-            suffix = path.suffix.lower()
-            mime = "image/png" if suffix == ".png" else "image/jpeg"
-            encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
-            data_url = f"data:{mime};base64,{encoded}"
-            content_parts.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": data_url, "detail": "high"},
-                },
-            )
+            for index, garment in enumerate(garments, start=1):
+                path = Path(garment.get("path", ""))
+                if not path.exists():
+                    logger.warning("Garment path %s does not exist; skipping.", path)
+                    continue
+                image_files.append(self._image_as_png(path, f"garment_{index}"))
 
-        if options:
-            options_text = ", ".join(f"{key}={value}" for key, value in options.items())
-            content_parts.append({"type": "text", "text": f"Параметры генерации: {options_text}"})
+            kwargs: dict[str, Any] = {
+                "model": self._settings.aitunnel_image_model,
+                "image": image_files,
+                "prompt": prompt,
+            }
+            if options:
+                kwargs.update(options)
 
-        payload: dict[str, Any] = {
-            "model": self._settings.aitunnel_image_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": content_parts,
-                },
-            ],
-            "modalities": ["image", "text"],
-        }
+            try:
+                result = await self._openai.images.edit(**kwargs)
+            except BadRequestError as exc:
+                fallback = self._fallback_image_model(kwargs["model"], str(exc))
+                if fallback:
+                    logger.warning("Model %s unavailable, retrying with %s", kwargs["model"], fallback)
+                    kwargs["model"] = fallback
+                    result = await self._openai.images.edit(**kwargs)
+                else:
+                    raise
+            return self._normalise_image_response(result)
+        finally:
+            for file in image_files:
+                file.close()
 
-        return await self._request_json(
-            "POST",
-            "/chat/completions",
-            json_body=payload,
-        )
+    def _image_as_png(self, source_path: Path, name_prefix: str) -> BytesIO:
+        try:
+            with Image.open(source_path) as img:
+                img = img.convert("RGBA")
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+        except UnidentifiedImageError as exc:
+            raise ValueError(f"Файл {source_path} не является поддерживаемым изображением.") from exc
+        buffer.seek(0)
+        buffer.name = f"{name_prefix}.png"
+        return buffer
+
+    def _normalise_image_response(self, result: Any) -> dict[str, Any]:
+        data_attr = getattr(result, "data", None)
+        payload: dict[str, Any] = {}
+        if isinstance(data_attr, list) and data_attr:
+            primary = data_attr[0]
+            image_base64 = getattr(primary, "b64_json", None)
+            image_url = getattr(primary, "url", None)
+            if image_base64 is None and isinstance(primary, Mapping):
+                image_base64 = primary.get("b64_json")
+                image_url = image_url or primary.get("url")
+            payload["image_base64"] = image_base64
+            payload["image_url"] = image_url
+        else:
+            payload["raw"] = result
+        return payload
+
+    def _fallback_image_model(self, current: str, error_message: str) -> str | None:
+        if current.endswith("-preview"):
+            return current.replace("-preview", "")
+        if "gemini-2.5-flash-image" in current and "не найдена" in error_message.lower():
+            return "gpt-image-1"
+        return None
 
     @staticmethod
     def image_payload_to_result(payload: Mapping[str, Any]) -> tuple[bytes | None, str | None]:

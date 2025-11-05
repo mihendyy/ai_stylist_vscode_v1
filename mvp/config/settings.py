@@ -31,7 +31,7 @@ class MVPSettings:
     aitunnel_api_key: str
     aitunnel_base_url: str
     aitunnel_chat_model: str = "gpt-4o"
-    aitunnel_image_model: str = "gemini-2.5-flash-image-preview"
+    aitunnel_image_model: str = "gemini-2.5-flash-image"
     aitunnel_stt_model: str = "whisper-1"
     storage_root: str = "storage/users"
     generated_root: str = "storage/generated"
@@ -47,7 +47,7 @@ def _build_settings() -> MVPSettings:
         aitunnel_chat_model=os.getenv("MVP_CHAT_MODEL", os.getenv("AITUNNEL_CHAT_MODEL", "gpt-4o")),
         aitunnel_image_model=os.getenv(
             "MVP_IMAGE_MODEL",
-            os.getenv("AITUNNEL_IMAGE_MODEL", "gemini-2.5-flash-image-preview"),
+            os.getenv("AITUNNEL_IMAGE_MODEL", "gemini-2.5-flash-image"),
         ),
         aitunnel_stt_model=os.getenv("MVP_STT_MODEL", "whisper-1"),
         storage_root=os.getenv("MVP_STORAGE_ROOT", "storage/users"),

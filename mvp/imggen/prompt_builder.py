@@ -34,17 +34,43 @@ class PromptBuilder:
 
     def build(
         self,
-        garment_labels: Sequence[str],
+        garments: Sequence[dict[str, str]],
         prompt_context: OutfitPromptContext,
+        *,
+        selfie_filename: str,
         extra_instructions: Iterable[str] | None = None,
     ) -> str:
-        """Return a natural-language prompt describing the desired outfit."""
+        """Return a natural-language instruction for editing the selfie with wardrobe items."""
 
-        garments = ", ".join(garment_labels) if garment_labels else "подходящие вещи из гардероба"
-        base = (
-            f"Пусть человек на фото будет одет в {garments}. "
-            f"{prompt_context.summary()} "
-            "Задай естественную позу и реалистичный свет. Сохрани внешность пользователя."
-        )
+        garment_lines: list[str] = []
+        for index, garment in enumerate(garments, start=1):
+            label = garment.get("label") or garment.get("filename") or f"предмет {index}"
+            category = garment.get("category")
+            file_name = garment.get("filename") or "изображение"
+            descriptor = label if not category else f"{label} ({category})"
+            garment_lines.append(f"{index}) {descriptor} — файл {file_name}.")
+
+        garments_text = (
+            "Используй прилагаемые фотографии вещей без изменений:\n"
+            + "\n".join(garment_lines)
+        ) if garment_lines else "Используй доступные фотографии гардероба."
+
+        summary = prompt_context.summary()
         extras = " ".join(extra_instructions or [])
-        return f"{base} {extras}".strip()
+        instructions = (
+            "Ты получишь селфи пользователя и отдельные фотографии вещей из его гардероба. "
+            f"Основное изображение: файл {selfie_filename}. "
+            "Твоя задача — отредактировать селфи, надев пользователя ровно в эти вещи. "
+            "Не придумывай новые элементы, не меняй цвета и фасоны, сохрани лицо и особенности фигуры."
+        )
+        return " ".join(
+            part
+            for part in [
+                instructions,
+                garments_text,
+                summary,
+                "Сцена должна быть реалистичной, с естественным светом и уверенной позой.",
+                extras,
+            ]
+            if part
+        ).strip()

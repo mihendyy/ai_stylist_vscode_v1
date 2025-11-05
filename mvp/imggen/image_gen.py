@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from mvp.api.aitunnel_client import AITunnelClient
 from mvp.storage.repository import UserStorage
+
+logger = logging.getLogger(__name__)
 
 
 class ImageGenerationService:
@@ -22,7 +25,8 @@ class ImageGenerationService:
         self,
         user_id: str,
         prompt: str,
-        image_paths: Sequence[Path],
+        selfie_path: Path,
+        garments: Sequence[Mapping[str, str]],
         *,
         options: Mapping[str, str] | None = None,
     ) -> dict[str, str]:
@@ -32,7 +36,12 @@ class ImageGenerationService:
         Returns dictionary containing ``prompt``, ``image_path`` or ``image_url``.
         """
 
-        result = await self._client.generate_image(prompt, image_paths, options=options)
+        result = await self._client.generate_image(
+            prompt,
+            selfie_path=selfie_path,
+            garments=garments,
+            options=options,
+        )
         image_bytes, data_url = AITunnelClient.image_payload_to_result(result)
         if image_bytes:
             generated_dir = self._storage.get_generated_dir(user_id)
