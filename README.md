@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ai_stylist_vscode_v1
 
 Telegram stylist bot that orchestrates multiple AI services and deploys via Yandex Cloud.
@@ -11,6 +12,12 @@ pip install -r requirements.txt
 ```
 
 Populate the `.env` file with the required API keys (Telegram bot token, AITunnel key). The values stay local because `.env` is ignored by git.
+
+Current variables:
+
+- `TELEGRAM_API` — токен телеграм-бота (интерфейс для пользователей).
+- `AITUNNEL_API` — ключ доступа к сервису AITunnel (ChatGPT и gemini-2.5-flash-image).
+- `GITHUB_PAT` — персональный токен GitHub, который мы используем для `git push`.
 
 ## Project layout
 
@@ -54,3 +61,8 @@ python scripts/check_integrations.py
 ```
 
 Скрипт выполнит проверку текстового и визуального API и выведет статус (требуется корректный AITunnel ключ).
+=======
+# AI Stylist Telegram Bot
+
+Черновой проект для экспериментов с телеграм-ботом. Файлы появятся позже, когда настроим основу.
+>>>>>>> 85157e9 (Initial commit)
