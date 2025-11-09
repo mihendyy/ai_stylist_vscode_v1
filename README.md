@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # ai_stylist_vscode_v1
 
 Telegram stylist bot that orchestrates multiple AI services and deploys via Yandex Cloud.
@@ -61,8 +60,3 @@ python scripts/check_integrations.py
 ```
 
 Скрипт выполнит проверку текстового и визуального API и выведет статус (требуется корректный AITunnel ключ).
-=======
-# AI Stylist Telegram Bot
-
-Черновой проект для экспериментов с телеграм-ботом. Файлы появятся позже, когда настроим основу.
->>>>>>> 85157e9 (Initial commit)
